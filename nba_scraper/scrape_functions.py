@@ -39,7 +39,7 @@ USER_AGENT = {
 }
 
 
-def get_date_games(from_date, to_date):
+def get_date_games(from_date, to_date,league_type="nba"):
     """
     Get all the game_ids in a valid date range
     Inputs:
@@ -48,6 +48,9 @@ def get_date_games(from_date, to_date):
     Outputs:
     game_ids - List of game_ids in range
     """
+    league_dict = {
+    'nba' : "00",
+    'wnba' : "10"}
     game_ids = []
     from_date = datetime.datetime.strptime(from_date, "%Y-%m-%d")
     to_date = datetime.datetime.strptime(to_date, "%Y-%m-%d")
@@ -56,7 +59,7 @@ def get_date_games(from_date, to_date):
     for season in range(get_season(from_date), get_season(to_date) + 1):
         url = (
             "http://data.nba.com/data/10s/v2015/json/mobile_teams"
-            f"/nba/{season}/league/00_full_schedule.json"
+            f"/{league_type}/{season}/league/{league_dict[league_type]}_full_schedule.json"
         )
         schedule = requests.get(url).json()
         time.sleep(1)

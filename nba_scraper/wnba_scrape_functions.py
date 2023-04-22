@@ -6,22 +6,20 @@ email: matt@barloweanalytics.com
 
 This file contains the main functions to scrape and compile the WNBA api
 """
-import sys
-import json
 import datetime
-import requests
+import json
+import sys
 import time
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+import requests
 
 from nba_scraper.helper_functions import EVENT_TYPE_DICT, get_season
-from nba_scraper.stat_calc_functions import (
-    wnba_made_shot,
-    wnba_parse_foul,
-    wnba_shot_types,
-    wnba_seconds_elapsed,
-    wnba_points_made,
-)
+from nba_scraper.stat_calc_functions import (wnba_made_shot, wnba_parse_foul,
+                                             wnba_points_made,
+                                             wnba_seconds_elapsed,
+                                             wnba_shot_types)
 
 USER_AGENT = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:72.0) Gecko/20100101 Firefox/72.0",
@@ -86,7 +84,7 @@ def get_team_ids(pbp_df):
     return home_team_id, away_team_id
 
 
-def get_wnba_pbp_api(game_id, quarter, season):
+def get_wnba_pbp_api(game_id, season):
     """
     function gets both JSON requests from the two different APIs if both
     are available and only the stats.nba.com api if not.
@@ -99,7 +97,8 @@ def get_wnba_pbp_api(game_id, quarter, season):
     Outputs:
     wnba_dict         - Dictionary of the JSON response from data.wnba.com api
     """
-    wnba_api_url = f"https://data.wnba.com/data/5s/v2015/json/mobile_teams/wnba/{season}/scores/pbp/1{game_id}_{quarter}_pbp.json"
+    wnba_api_url = f"https://data.wnba.com/data/10s/v2015/json/mobile_teams/wnba/{season}/scores/pbp/1{game_id}_full_pbp.json"
+    #wnba_api_url = f"https://data.wnba.com/data/5s/v2015/json/mobile_teams/wnba/{season}/scores/pbp/1{game_id}_{quarter}_pbp.json"
 
     try:
         wnba_rep = requests.get(wnba_api_url)
@@ -129,25 +128,24 @@ def parse_wnba_pbp(game_id):
         season = f"19{game_id[2:4]}"
     else:
         season = f"20{game_id[2:4]}"
-    results = []
-    for x in range(1, 15):
-        try:
-            results.append(get_wnba_pbp_api(game_id, x, season))
-        except ValueError:
-            break
+    try:
+        results = get_wnba_pbp_api(game_id, season)
+    except ValueError:
+        print("Game Not Found. Or issue with API")
+    period_game = results['g']['pd']
     dfs = []
-    for period, v2_dict in enumerate(results):
-        pbp_v2_df = pd.DataFrame(v2_dict["g"]["pla"])
+    for i in range(0,len(period_game)):
+        pbp_v2_df = pd.DataFrame(period_game[i]['pla'])
         pbp_v2_df.columns = list(map(str.lower, pbp_v2_df.columns))
-        pbp_v2_df["period"] = period + 1
+        pbp_v2_df["period"] = i + 1 
         dfs.append(pbp_v2_df)
 
     pbp_df = pd.concat(dfs)
 
-    pbp_df["game_date"] = results[0]["g"]["gcode"].split("/")[0]
+    pbp_df["game_date"] = results['g']["gcode"].split("/")[0]
     pbp_df["game_date"] = pd.to_datetime(pbp_df["game_date"], format="%Y%m%d")
-    pbp_df["away_team_abbrev"] = results[0]["g"]["gcode"].split("/")[1][:3]
-    pbp_df["home_team_abbrev"] = results[0]["g"]["gcode"].split("/")[1][3:]
+    pbp_df["away_team_abbrev"] = results['g']["gcode"].split("/")[1][:3]
+    pbp_df["home_team_abbrev"] = results['g']["gcode"].split("/")[1][3:]
     pbp_df["seconds_elapsed"] = pbp_df.apply(wnba_seconds_elapsed, axis=1)
     pbp_df["shot_type"] = pbp_df.apply(wnba_shot_types, axis=1)
     pbp_df["game_id"] = game_id
@@ -509,7 +507,7 @@ def get_lineup(period_df, lineups, dataframe):
 def wnba_main_scrape(game_id):
     """
     This is the main function which ties everything together and will be imported
-    into nba_scraper module as the hook to scrape nba games
+    into nba_scraper module as the hook to scrape wnba games
 
     Inputs:
     game_id      - WNBA game id to be scraped
