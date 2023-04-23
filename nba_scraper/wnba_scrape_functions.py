@@ -84,19 +84,21 @@ def get_team_ids(pbp_df):
     return home_team_id, away_team_id
 
 
-def get_wnba_pbp_api(game_id, season):
+def  get_wnba_pbp_api(game_id):
     """
     function gets both JSON requests from the two different APIs if both
     are available and only the stats.nba.com api if not.
 
     Inputs:
     game_id          - String representing game id
-    quarter          - number representing what quarter you want
-    season           - number in the format of YYYY representing what the season is
 
     Outputs:
     wnba_dict         - Dictionary of the JSON response from data.wnba.com api
     """
+    if game_id[2:4] in ["98", "99"]:
+        season = f"19{game_id[2:4]}"
+    else:
+        season = f"20{game_id[2:4]}"
     wnba_api_url = f"https://data.wnba.com/data/10s/v2015/json/mobile_teams/wnba/{season}/scores/pbp/1{game_id}_full_pbp.json"
     #wnba_api_url = f"https://data.wnba.com/data/5s/v2015/json/mobile_teams/wnba/{season}/scores/pbp/1{game_id}_{quarter}_pbp.json"
 
@@ -112,7 +114,7 @@ def get_wnba_pbp_api(game_id, season):
     return wnba_dict
 
 
-def parse_wnba_pbp(game_id):
+def parse_wnba_pbp(results, game_id):
     """
     function to parse the JSON output of the api into a dataframe
 
@@ -124,14 +126,6 @@ def parse_wnba_pbp(game_id):
     wnba_pbp_df   - wnba play by play dataframe
     """
 
-    if game_id[2:4] in ["98", "99"]:
-        season = f"19{game_id[2:4]}"
-    else:
-        season = f"20{game_id[2:4]}"
-    try:
-        results = get_wnba_pbp_api(game_id, season)
-    except ValueError:
-        print("Game Not Found. Or issue with API")
     period_game = results['g']['pd']
     dfs = []
     for i in range(0,len(period_game)):
@@ -504,6 +498,33 @@ def get_lineup(period_df, lineups, dataframe):
     return period_df
 
 
+def wnba_process_json(pbp_json, game_id):
+    """
+    This runs all of the processing: (1) wnba parsers and (2) lineup processing. 
+
+    Inputs: 
+    pbp_json - WNBA pbp json 
+    game_id  -  WNBA game id 
+
+    Outputs:
+    pbp_df      - WNBA dataframe of the play by play
+
+    """
+    pbp_df = parse_wnba_pbp(pbp_json, game_id)
+
+    periods = []
+
+    for period in range(1, pbp_df["period"].max() + 1):
+        lineups = get_wnba_lineup(game_id, period)
+        periods.append(
+            get_lineup(pbp_df[pbp_df["period"] == period].copy(), lineups, pbp_df,)
+        )
+
+    pbp_df = pd.concat(periods)
+
+    return pbp_df
+
+
 def wnba_main_scrape(game_id):
     """
     This is the main function which ties everything together and will be imported
@@ -519,19 +540,12 @@ def wnba_main_scrape(game_id):
     they add a 1 to the front of the game_id for some reason
     """
 
-    pbp_df = parse_wnba_pbp(game_id)
+    
+    game_results = get_wnba_pbp_api(game_id)
 
-    periods = []
-
-    for period in range(1, pbp_df["period"].max() + 1):
-        lineups = get_wnba_lineup(game_id, period)
-        periods.append(
-            get_lineup(pbp_df[pbp_df["period"] == period].copy(), lineups, pbp_df,)
-        )
-
-    pbp_df = pd.concat(periods)
-
-    return pbp_df
+    final_df = wnba_process_json(game_results, game_id)
+    
+    return final_df
 
 
 def main():
